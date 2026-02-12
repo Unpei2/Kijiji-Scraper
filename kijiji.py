@@ -14,26 +14,81 @@ DRIVER = None
 
 KIJIJI_URL = "https://www.kijiji.ca/b-cars-trucks/edmonton/c174l1700203?kilometers=0__150000&price=0__15000&transmission=1&view=list"
 LISTING_LIST_CLASS = "sc-31c99dfc-0 dREgHU"
-TITLE_CLASS = "sc-991ea11d-0 eZUULr sc-54de28bc-3 imlMOc"
+LISTING_LIST_XPATH = '/html/body/div[1]/div/div/div/main/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/ul'
+
+TITLE_CLASS = "sc-eb5dea32-1 gPyerW"
+
+PRICE_CLASS = "sc-991ea11d-0 eZUULr sc-54de28bc-3 imlMOc"
+
+ODOMETER_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
+
+TRANSMISSION_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 
 def traverse():
     with open("source.txt", "w") as file:
         file.write(DRIVER.page_source)
     
-    
+    listings = []
 
     html_content = DRIVER.page_source
     soup = BeautifulSoup(html_content, "html.parser")
-
-    list = soup.find(By.CLASS_NAME, LISTING_LIST_CLASS)
-
-    if list:
-        listings = list.find_all("li")
     
-        for post in listings:
-            title = soup.find(By.CLASS_NAME, TITLE_CLASS)
-            print(title)
+    time.sleep(5)       # wait for listings to load
 
+    list = soup.find("ul", class_=LISTING_LIST_CLASS)
+
+    try:
+        listings = list.find_all("li")
+    except Exception as e:
+        print(f"{e}, Listings could not be found.")
+
+    with open ("titles.txt", "w") as file:
+        
+        for post in listings:
+            
+            try:        # Title
+                title = post.find("a", class_=TITLE_CLASS)
+                file.write(f"{title.text}|")
+            except Exception as e:
+                print(f"{e}. Title could not be found.")
+                continue
+
+            try:        # Price
+                price = post.find("p", class_=PRICE_CLASS)
+                file.write(f"{title.text}|")
+            except Exception as e:
+                print(f"{e}. Price finding error.")
+                continue
+                
+            try:        # Kilometers
+                odometer = post.find("p", class_=ODOMETER_CLASS)
+                file.write(f"{odometer.text}|")
+            except Exception as e:
+                print(f"{e}. Odometer finding error.")
+                continue
+
+            try:        # Transmission type
+                transmission = odometer.find_next("p", class_=TRANSMISSION_CLASS)
+                file.write(f"{transmission.text}|")
+            except Exception as e:
+                print(f"{e}. Transmission finding error.")
+                continue
+
+            try:        # Link is found in title
+                link = title.get("href")
+                file.write(f"{link}\n")
+            except Exception as e:
+                print(f"{e}. Link error.")
+                continue
+            
+            listings.append({"Title:": title.text, "Price":price.text, "Kilometers":odometer.text, "Transmission:":transmission.text, "Link":link})
+
+    with open ("dict.txt", "w") as file:
+        for item in listings:
+            print(item)
+
+    print("Finished")
+    
     
     
 def main():
@@ -47,14 +102,11 @@ def main():
     open_options.add_argument("--log-level=3")
     open_options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
-    # # Gets rid of notification popup
-    # notifications = {"profile.default_content_setting_values.notifications" : 2}
-    # open_options.add_experimental_option("prefs", notifications)
 
     DRIVER = webdriver.Chrome(options=open_options)
     WAIT = WebDriverWait(DRIVER, 20)
     DRIVER.get(KIJIJI_URL)
-
+    traverse()
 
 if __name__ == "__main__":
     main()
