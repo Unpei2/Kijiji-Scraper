@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 import time
 import os
-
+import re
 
 DRIVER = None
 
@@ -23,6 +23,7 @@ PRICE_CLASS = "sc-991ea11d-0 eZUULr sc-54de28bc-3 imlMOc"
 ODOMETER_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 
 TRANSMISSION_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
+
 
 def traverse():
     with open("source.txt", "w") as file:
@@ -81,7 +82,9 @@ def traverse():
                 print(f"{e}. Link error.")
                 continue
             
-            listings.append({"Title:": title.text, "Price":price.text, "Kilometers":odometer.text, "Transmission:":transmission.text, "Link":link})
+            year = re.search("^\d{4}")
+            print(year)
+            listings.append({"Title:": title.text, "Price":price.text, "Kilometers":odometer.text, "Transmission:":transmission.text,"Year": year ,"Link":link})
 
     with open ("dict.txt", "w") as file:
         for item in listings:
