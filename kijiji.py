@@ -82,13 +82,13 @@ def traverse():
                 print(f"{e}. Link error.")
                 continue
             
-            year = re.search("^\d{4}")
-            print(year)
+            year = re.search("\\d{4}", title)
+            print(year.group())
             listings.append({"Title:": title.text, "Price":price.text, "Kilometers":odometer.text, "Transmission:":transmission.text,"Year": year ,"Link":link})
 
-    with open ("dict.txt", "w") as file:
-        for item in listings:
-            print(item)
+    # with open ("dict.txt", "w") as file:
+    for item in listings:
+        print(item)
 
     print("Finished")
     
