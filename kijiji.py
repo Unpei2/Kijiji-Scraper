@@ -4,6 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from bs4 import BeautifulSoup
 
 import time
@@ -16,36 +17,43 @@ KIJIJI_URL = "https://www.kijiji.ca/b-cars-trucks/edmonton/c174l1700203?kilomete
 NEXT_BUTTON_XPATH = "/html/body/div[1]/div/div/div/main/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a"
 NEXT_BUTTON_REL_XPATH = '//*[@id="base-layout-main-wrapper"]/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a'
 NEXT_BUTTON_CLASS = "sc-c8742e84-0 jwUdte sc-4c795659-3 garPwt"
-LISTING_LIST_CLASS = "sc-31c99dfc-0 dREgHU"
-TITLE_CLASS = "sc-eb5dea32-1 gPyerW"
-PRICE_CLASS = "sc-991ea11d-0 eZUULr sc-54de28bc-3 imlMOc"
+NEXT_BUTTON_ID = "pagination-next-link"
+
+LISTING_LIST_ID = "srp-search-list"
+TITLE_ID = "listing-link"        # listing link and title are in same <a> 
+PRICE_ID = "autos-listing-price"
 ODOMETER_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 TRANSMISSION_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 
 
+
+
 def traverse(listings):
-    time.sleep(3)       # wait for listings to load
+    WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
+    html_content = DRIVER.page_source
+    soup = BeautifulSoup(html_content, "html.parser")
+    listing_list = soup.find("ul", attrs={"data-testid":LISTING_LIST_ID})
 
-    list = SOUP.find("ul", class_=LISTING_LIST_CLASS)
-
+    
 
     try:
-        all_listings = list.find_all("li")
+        all_listings = listing_list.find_all("li")
     except Exception as e:
+        
         print(f"{e}, Listings could not be found.")
-
+        return
         
     for post in all_listings:
         
         try:        # Title
-            title = post.find("a", class_=TITLE_CLASS)
+            title = post.find("a", attrs={"data-testid": TITLE_ID})
             title_string = title.text
         except AttributeError as e:
             # print(f"{e}. Title could not be found.")
             continue
 
         try:        # Price
-            price = post.find("p", class_=PRICE_CLASS)
+            price = post.find("p", attrs={"data-testid": PRICE_ID})
             price_string = price.text
         except Exception as e:
             print(f"{e}. Price finding error.")
@@ -86,12 +94,12 @@ def traverse(listings):
         except Exception as e:
             print(f"{e}. Year parsing error.")
 
-
+        print(title_string)
         listings.append({"Title": title_string, "Price": price_string, "Kilometers": correct, "Transmission": transmission_string, "Year": parsed_year ,"Link":link})
     
 
 def main():
-    global DRIVER, WAIT, SOUP
+    global DRIVER, WAIT
     open_options = Options()
 
     # Opens page until click close yourself, can delete later
@@ -103,27 +111,32 @@ def main():
 
 
     DRIVER = webdriver.Chrome(options=open_options)
-    WAIT = WebDriverWait(DRIVER, 20)
+    WAIT = WebDriverWait(DRIVER, 10)
     DRIVER.get(KIJIJI_URL)
 
-    html_content = DRIVER.page_source
-    SOUP = BeautifulSoup(html_content, "html.parser")
-
     listings = []
-
-    time.sleep(3)
     
-    next = SOUP.find("a", class_=NEXT_BUTTON_CLASS)
+
     while (True):
         traverse(listings)
-        if (next is not None):
-            next.click()
-        else:
+        
+        try:
+            old_page = DRIVER.find_element(By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')
+            next = WAIT.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'[data-testid="{NEXT_BUTTON_ID}"]')))
+            DRIVER.execute_script("arguments[0].click();", next)
+            try:
+                WAIT.until(EC.staleness_of(old_page))
+            except StaleElementReferenceException:
+                pass        # Element already gone from the DOM
+            WAIT.until(EC.presence_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
+
+        except (TimeoutException, Exception) as e:
+            print(f"{e}.")
             break
 
     with open ("dict.txt", "w") as file:
         for item in listings:
-            file.write(f"{item["Title"]}|{item["Price"]}|{item["Kilometers"]}|{item["Transmission"]}|{item["Year"]}|{item["Link"]}\n")
+            file.write(f'{item["Title"]}|{item["Price"]}|{item["Kilometers"]}|{item["Transmission"]}|{item["Year"]}|{item["Link"]}\n')
 
     print("Finished")
 
