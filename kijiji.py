@@ -4,7 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+
 from bs4 import BeautifulSoup
 
 import time
@@ -32,7 +32,15 @@ def traverse(listings):
     WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
     html_content = DRIVER.page_source
     soup = BeautifulSoup(html_content, "html.parser")
-    listing_list = soup.find("ul", attrs={"data-testid":LISTING_LIST_ID})
+    listing_list = soup.find("ul", attrs={"data-testid": LISTING_LIST_ID})
+
+    # Extract next page URL directly from parsed HTML
+    next_url = None
+    next_link = soup.find("a", attrs={"data-testid": NEXT_BUTTON_ID})
+    if next_link:
+        next_url = next_link.get("href")
+        if next_url and next_url.startswith("/"):
+            next_url = "https://www.kijiji.ca" + next_url
 
     
 
@@ -94,9 +102,11 @@ def traverse(listings):
         except Exception as e:
             print(f"{e}. Year parsing error.")
 
-        print(title_string)
+        
         listings.append({"Title": title_string, "Price": price_string, "Kilometers": correct, "Transmission": transmission_string, "Year": parsed_year ,"Link":link})
-    
+
+    return next_url
+
 
 def main():
     global DRIVER, WAIT
@@ -115,29 +125,41 @@ def main():
     DRIVER.get(KIJIJI_URL)
 
     listings = []
-    
+    page = 1
+    visited_urls = set()
 
     while (True):
-        traverse(listings)
-        
-        try:
-            old_page = DRIVER.find_element(By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')
-            next = WAIT.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'[data-testid="{NEXT_BUTTON_ID}"]')))
-            DRIVER.execute_script("arguments[0].click();", next)
-            try:
-                WAIT.until(EC.staleness_of(old_page))
-            except StaleElementReferenceException:
-                pass        # Element already gone from the DOM
-            WAIT.until(EC.presence_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
+        current_url = DRIVER.current_url
+        visited_urls.add(current_url)
 
-        except (TimeoutException, Exception) as e:
-            print(f"{e}.")
+        print(f"\n--- Scraping page {page} ---")
+        before = len(listings)
+        next_url = traverse(listings)
+        after = len(listings)
+        print(f"Page {page}: added {after - before} listings (total so far: {after})")
+
+        if not next_url:
+            print("No next page URL found, stopping.")
             break
+
+        if next_url in visited_urls:
+            print(f"Already visited {next_url}, stopping to avoid infinite loop.")
+            break
+
+        print(f"Navigating to: {next_url}")
+        DRIVER.get(next_url)
+        page += 1
+
+    print(f"\nTotal listings scraped: {len(listings)}")
 
     with open ("dict.txt", "w") as file:
         for item in listings:
             file.write(f'{item["Title"]}|{item["Price"]}|{item["Kilometers"]}|{item["Transmission"]}|{item["Year"]}|{item["Link"]}\n')
 
+    with open("dict.txt", "r") as file:
+        line_count = sum(1 for _ in file)
+        
+    print(f"Lines written to dict.txt: {line_count}")
     print("Finished")
 
 if __name__ == "__main__":
