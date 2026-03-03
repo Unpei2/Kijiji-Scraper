@@ -152,11 +152,14 @@ def main():
 
     print(f"\nTotal listings scraped: {len(listings)}")
 
-    with open ("dict.txt", "w") as file:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dict_path = os.path.join(script_dir, "dict.txt")
+
+    with open(dict_path, "w") as file:
         for item in listings:
             file.write(f'{item["Title"]}|{item["Price"]}|{item["Kilometers"]}|{item["Transmission"]}|{item["Year"]}|{item["Link"]}\n')
 
-    with open("dict.txt", "r") as file:
+    with open(dict_path, "r") as file:
         line_count = sum(1 for _ in file)
         
     print(f"Lines written to dict.txt: {line_count}")
