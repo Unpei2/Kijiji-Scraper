@@ -1,4 +1,4 @@
-from user_choice import kilometers
+
 
 def main():
     return

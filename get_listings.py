@@ -1,23 +1,25 @@
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from bs4 import BeautifulSoup
-
-import time
-import os
 import re
 
-DRIVER = None
+import os
+import json
+import time
 
-KIJIJI_URL = "https://www.kijiji.ca/b-cars-trucks/edmonton/c174l1700203?kilometers=0__150000&price=0__15000&transmission=1&view=list"
+DRIVER = None
+# KIJIJI_URL = "https://www.kijiji.ca/b-cars-trucks/edmonton/c174l1700203?kilometers=0__150000&price=0__15000&transmission=1&view=list"
+BASE_LINK = "https://www.kijiji.ca/b-cars-trucks/"
+
 NEXT_BUTTON_XPATH = "/html/body/div[1]/div/div/div/main/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a"
 NEXT_BUTTON_REL_XPATH = '//*[@id="base-layout-main-wrapper"]/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a'
 NEXT_BUTTON_CLASS = "sc-c8742e84-0 jwUdte sc-4c795659-3 garPwt"
 NEXT_BUTTON_ID = "pagination-next-link"
+NUM_TOTAL_LISTINGS = "srp-results"
 
 LISTING_LIST_ID = "srp-search-list"
 TITLE_ID = "listing-link"        # listing link and title are in same <a> 
@@ -25,10 +27,44 @@ PRICE_ID = "autos-listing-price"
 ODOMETER_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 TRANSMISSION_CLASS = "sc-991ea11d-0 epsmyv sc-4b5a8895-2 eEvVV"
 
+CITIES = {
+    "edmonton":     ("edmonton-area",            "l1700202"),
+    "calgary":      ("calgary",                  "l1700199"),
+    "toronto gta":  ("gta-greater-toronto-area", "l1700272"),
+    "toronto":      ("city-of-toronto",          "l1700273"),
+    "mississauga":  ("mississauga-peel-region",  "l1700276"),
+    "markham":      ("markham-york-region",       "l1700274"),
+    "vancouver gta":("greater-vancouver-area",   "l80003"),
+    "vancouver":    ("vancouver",                "l1700287"),
+    "richmond":     ("richmond-bc",              "l1700288"),
+    "victoria":     ("victoria-bc",              "l1700173"),
+}
 
+def build_url():
+    with open("preferences.json", "r") as f:
+        prefs = json.load(f)
 
+    city_slug, location_id = CITIES[prefs["city"]]
+    year_range = f"{prefs['min_year']}__{prefs['max_year']}"
+    transmission = prefs["transmission_type"]
+    transmission_param = f"&transmission={transmission}" if transmission != 0 else ""
 
+    brands = prefs.get("brands", [])
+    if brands:
+        makes = "__".join(b.replace(" ", "+") for b in brands)
+        category = f"{makes}/c174{location_id}a54"
+    else:
+        category = f"c174{location_id}"
+
+    return (
+        f"https://www.kijiji.ca/b-cars-trucks/{city_slug}/{category}"
+        f"?kilometers=0__{prefs['max_kilometers']}"
+        f"&price={prefs['min_price']}__{prefs['max_price']}"
+        f"{transmission_param}"
+        f"&view=list"
+    )
 def traverse(listings):
+    global num_listings
     WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
     html_content = DRIVER.page_source
     soup = BeautifulSoup(html_content, "html.parser")
@@ -36,13 +72,12 @@ def traverse(listings):
 
     # Extract next page URL directly from parsed HTML
     next_url = None
-    next_link = soup.find("a", attrs={"data-testid": NEXT_BUTTON_ID})
-    if next_link:
+    next_container = soup.find("li", attrs={"data-testid": NEXT_BUTTON_ID})
+    if next_container:
+        next_link = next_container.find("a")
         next_url = next_link.get("href")
-        if next_url and next_url.startswith("/"):
-            next_url = "https://www.kijiji.ca" + next_url
-
-    
+        
+    num_listings = soup.find("h2", attrs={"data-testid": NUM_TOTAL_LISTINGS}).find_next("h2", attrs={"data-testid": NUM_TOTAL_LISTINGS})
 
     try:
         all_listings = listing_list.find_all("li")
@@ -60,10 +95,20 @@ def traverse(listings):
             # print(f"{e}. Title could not be found.")
             continue
 
+        try:        # Link is found in title
+            link = title.get("href")
+            if link in SEEN:
+                continue
+        except Exception as e:
+            link = "NA"
+            print(f"{e}. Link error.")
+            continue
+
         try:        # Price
             price = post.find("p", attrs={"data-testid": PRICE_ID})
             price_string = price.text
         except Exception as e:
+            price_string = "NA"
             print(f"{e}. Price finding error.")
             continue
             
@@ -76,6 +121,7 @@ def traverse(listings):
                 corrected_odometer = corrected_odometer * 1000
             correct = str(corrected_odometer) + ' km'
         except Exception as e:
+            correct = "NA"
             print(f"{e}. Odometer finding error.")
             continue
 
@@ -83,14 +129,11 @@ def traverse(listings):
             transmission = odometer.find_next("p", class_=TRANSMISSION_CLASS)
             transmission_string = transmission.text
         except Exception as e:
+            transmission = "NA"
             print(f"{e}. Transmission finding error.")
             continue
 
-        try:        # Link is found in title
-            link = title.get("href")
-        except Exception as e:
-            print(f"{e}. Link error.")
-            continue
+        
         
         # Regex expression for year
         try:
@@ -109,34 +152,51 @@ def traverse(listings):
 
 
 def main():
-    global DRIVER, WAIT
+    global DRIVER, WAIT, SEEN
     open_options = Options()
-
-    # Opens page until click close yourself, can delete later
-    open_options.add_experimental_option("detach", True)
 
     # Gets rid of all extra console information
     open_options.add_argument("--log-level=3")
     open_options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
+    open_options.add_argument("--headless=new")
+    open_options.add_argument("--disable-gpu")
+    open_options.add_argument("--no-sandbox")
+
+    # Stop all images from loading
+    open_options.add_experimental_option("prefs", {
+        "profile.managed_default_content_settings.images": 2,
+        "profile.managed_default_content_settings.stylesheets": 2,
+    })
+
+    # Does not wait for everything to load, cuts down runtime from 30s to 1 s
+    open_options.page_load_strategy = "eager"
 
     DRIVER = webdriver.Chrome(options=open_options)
     WAIT = WebDriverWait(DRIVER, 10)
-    DRIVER.get(KIJIJI_URL)
+    DRIVER.get(build_url())
 
     listings = []
     page = 1
     visited_urls = set()
+    total_start = time.time()
+    SEEN = set()
+    if os.path.exists("matching_listings.csv"):
+        with open("matching_listings.csv", "r") as f:
+            for line in f:
+                link = line.strip().split(";")[-1]  # link is the last column
+                SEEN.add(link)
 
     while (True):
         current_url = DRIVER.current_url
         visited_urls.add(current_url)
 
-        print(f"\n--- Scraping page {page} ---")
+        print(f"--- Scraping page {page} ---")
         before = len(listings)
+        page_start = time.time()
         next_url = traverse(listings)
         after = len(listings)
-        print(f"Page {page}: added {after - before} listings (total so far: {after})")
+        print(f"Page {page}: added {after - before} listings (total so far: {after} out of {num_listings.text}) | {time.time() - page_start:.1f}s | elapsed: {time.time() - total_start:.1f}s\n")
 
         if not next_url:
             print("No next page URL found, stopping.")
@@ -146,23 +206,25 @@ def main():
             print(f"Already visited {next_url}, stopping to avoid infinite loop.")
             break
 
-        print(f"Navigating to: {next_url}")
+        
         DRIVER.get(next_url)
         page += 1
+        print(f"Navigating to: page {page}")
+    
+    print(f"\nTotal listings scraped: {len(listings)} out of {num_listings.text}")
 
-    print(f"\nTotal listings scraped: {len(listings)}")
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    dict_path = os.path.join(script_dir, "dict.txt")
-
-    with open(dict_path, "w") as file:
+    with open("matching_listings.csv", "a") as file:
         for item in listings:
-            file.write(f'{item["Title"]}|{item["Price"]}|{item["Kilometers"]}|{item["Transmission"]}|{item["Year"]}|{item["Link"]}\n')
+            file.write(f'{item["Title"]};{item["Price"]};{item["Kilometers"]};{item["Transmission"]};{item["Year"]};{item["Link"]}\n')
 
-    with open(dict_path, "r") as file:
+    with open("matching_listings.csv", "r") as file:
         line_count = sum(1 for _ in file)
         
-    print(f"Lines written to dict.txt: {line_count}")
+    
+    if (len(listings) == 0):
+        print("No new listings.")
+    else:
+        print(f"{len(listings)} listings added to matching_listings.csv: {line_count}")
     print("Finished")
 
 if __name__ == "__main__":

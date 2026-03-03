@@ -1,3 +1,7 @@
 dict.txt
 source.txt
 titles.txt
+__pycache__
+all_listings.csv
+preferences.json
+matching_listings.csv
