@@ -17,9 +17,6 @@ import keyring
 DRIVER = None
 BASE_LINK = "https://www.kijiji.ca/b-cars-trucks/"
 
-NEXT_BUTTON_XPATH = "/html/body/div[1]/div/div/div/main/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a"
-NEXT_BUTTON_REL_XPATH = '//*[@id="base-layout-main-wrapper"]/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a'
-NEXT_BUTTON_CLASS = "sc-c8742e84-0 jwUdte sc-4c795659-3 garPwt"
 NEXT_BUTTON_ID = "pagination-next-link"
 NUM_TOTAL_LISTINGS = "srp-results"
 
@@ -54,9 +51,9 @@ def build_url():
     brands = prefs.get("brands", [])
     if brands:
         makes = "__".join(b.replace(" ", "+") for b in brands)
-        category = f"{makes}/c174{location_id}a54"
+        category = f"{makes}-{year_range}/c174{location_id}a54a68"
     else:
-        category = f"c174{location_id}"
+        category = f"{year_range}/c174{location_id}a68"
 
     return (
         f"{BASE_LINK}{city_slug}/{category}"
@@ -66,7 +63,7 @@ def build_url():
         f"&view=list"
     )
 
-def traverse(listings):
+def traverse(listings, prefs):
     global num_listings
     try:
         WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
@@ -151,6 +148,10 @@ def traverse(listings):
                 parsed_year = "NA"
         except Exception as e:
             print(f"{e}. Year parsing error.")
+            parsed_year = "NA"
+
+        if parsed_year == "NA" and (prefs.get("min_year") or prefs.get("max_year")):
+            continue
 
         
         listings.append({"Title": title_string, "Price": price_string, "Kilometers": correct, "Transmission": transmission_string, "Year": parsed_year ,"Link":link})
@@ -181,6 +182,8 @@ def main():
 
     DRIVER = webdriver.Chrome(options=open_options)
     WAIT = WebDriverWait(DRIVER, 10)
+    with open("preferences.json", "r") as f:
+        prefs = json.load(f)
     DRIVER.get(build_url())
 
     listings = []
@@ -201,7 +204,7 @@ def main():
         print(f"--- Scraping page {page} ---")
         before = len(listings)
         page_start = time.time()
-        next_url = traverse(listings)
+        next_url = traverse(listings, prefs)
         after = len(listings)
         print(f"Page {page}: added {after - before} listings (total so far: {after} out of {num_listings.text}) | {time.time() - page_start:.1f}s | elapsed: {time.time() - total_start:.1f}s\n")
 
@@ -232,8 +235,6 @@ def main():
         print("No new listings.")
     else:
         print(f"{len(listings)} listings added to matching_listings.csv: {line_count}")
-        with open("preferences.json", "r") as f:
-            prefs = json.load(f)
         email = prefs["email"]
         password = keyring.get_password("kijiji-scraper", email)
         body = f"{len(listings)} new listings matching your preferences were found!\n\n"
@@ -243,6 +244,7 @@ def main():
         
         send_email(email, password, body)
 
+    DRIVER.quit()
     print("Finished")
 
 if __name__ == "__main__":
