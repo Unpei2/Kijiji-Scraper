@@ -5,14 +5,16 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from bs4 import BeautifulSoup
-import re
 
+from notification import send_email
+
+import re
 import os
 import json
 import time
+import keyring
 
 DRIVER = None
-# KIJIJI_URL = "https://www.kijiji.ca/b-cars-trucks/edmonton/c174l1700203?kilometers=0__150000&price=0__15000&transmission=1&view=list"
 BASE_LINK = "https://www.kijiji.ca/b-cars-trucks/"
 
 NEXT_BUTTON_XPATH = "/html/body/div[1]/div/div/div/main/div/div[3]/div[2]/div[1]/div[2]/div[3]/div/div/div[3]/div/div/nav/ul/li[3]/a"
@@ -57,15 +59,20 @@ def build_url():
         category = f"c174{location_id}"
 
     return (
-        f"https://www.kijiji.ca/b-cars-trucks/{city_slug}/{category}"
+        f"{BASE_LINK}{city_slug}/{category}"
         f"?kilometers=0__{prefs['max_kilometers']}"
         f"&price={prefs['min_price']}__{prefs['max_price']}"
         f"{transmission_param}"
         f"&view=list"
     )
+
 def traverse(listings):
     global num_listings
-    WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
+    try:
+        WAIT.until(EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="{LISTING_LIST_ID}"]')))
+    except Exception:
+        print("No listings found on this page.")
+        return None
     html_content = DRIVER.page_source
     soup = BeautifulSoup(html_content, "html.parser")
     listing_list = soup.find("ul", attrs={"data-testid": LISTING_LIST_ID})
@@ -147,7 +154,7 @@ def traverse(listings):
 
         
         listings.append({"Title": title_string, "Price": price_string, "Kilometers": correct, "Transmission": transmission_string, "Year": parsed_year ,"Link":link})
-
+        
     return next_url
 
 
@@ -225,6 +232,17 @@ def main():
         print("No new listings.")
     else:
         print(f"{len(listings)} listings added to matching_listings.csv: {line_count}")
+        with open("preferences.json", "r") as f:
+            prefs = json.load(f)
+        email = prefs["email"]
+        password = keyring.get_password("kijiji-scraper", email)
+        body = f"{len(listings)} new listings matching your preferences were found!\n\n"
+
+        for item in listings:
+            body += f"{item['Title']} - {item['Price']} - {item['Kilometers']}\n{item['Link']}\n\n"
+        
+        send_email(email, password, body)
+
     print("Finished")
 
 if __name__ == "__main__":

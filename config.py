@@ -1,7 +1,6 @@
 import json
-
-
-PREFS_FILE = "preferences.json"
+import getpass
+import keyring
 
 def get_preferences():
     brands = []
@@ -14,15 +13,33 @@ def get_preferences():
             break
         brands.append(user_input)
 
-    min_price = int(input("Enter minimum price: "))
-    max_price = int(input("Enter maximum price: "))
-    min_year = int(input("Enter minimum year: "))
-    max_year = int(input("Enter maximum year: "))
-    max_kilometers = int(input("Enter maximum kilometers: "))
-    transmission_type = int(input("Enter transmission preference (0 for no preference, 1 for manual, 2 for automatic): "))
+    min_price = int(input("Minimum price: "))
+    max_price = int(input("Maximum price: "))
+    min_year = int(input("Minimum year: "))
+    max_year = int(input("Maximum year: "))
+    max_kilometers = int(input("Maximum kilometers: "))
+    transmission_type = int(input("Transmission preference (0 for no preference, 1 for manual, 2 for automatic): "))
 
     print("Available cities: Edmonton, Calgary, Toronto GTA, Toronto, Mississauga, Markham, Vancouver GTA, Vancouver, Richmond, Victoria")
     city = str(input("Enter city to search in: ")).strip().lower()
+
+    import smtplib
+    email = str(input("Enter email: ")).strip()
+    existing_password = keyring.get_password("kijiji-scraper", email)
+    if existing_password:
+        print("A saved App Password was found for this email. Using existing password.")
+    else:
+        while True:
+            password = getpass.getpass("Enter Gmail App Password (input hidden): ")
+            try:
+                with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                    server.starttls()
+                    server.login(email, password)
+                keyring.set_password("kijiji-scraper", email, password)
+                print("Email verified and saved successfully.")
+                break
+            except smtplib.SMTPAuthenticationError:
+                print("Incorrect email or App Password. Please try again.")
 
     prefs = {
         "brands": brands,
@@ -32,10 +49,10 @@ def get_preferences():
         "max_year": max_year,
         "max_kilometers": max_kilometers,
         "transmission_type": transmission_type,
-        "city": city
+        "city": city,
+        "email": email
     }
 
-    with open(PREFS_FILE, "w") as f:
+    with open("preferences.json", "w") as f:
         json.dump(prefs, f, indent=4)
 
-get_preferences()
