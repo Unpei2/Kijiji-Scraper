@@ -11,7 +11,7 @@ def schedule_task():
         subprocess.run([
             "schtasks", "/create",
             "/tn", name,
-            "/tr", f'cmd.exe /k "{python_path} {script_path}"',
+            "/tr", f'cmd.exe /k ""{python_path}" "{script_path}""',
             "/sc", "daily",
             "/st", time,
             "/f"
