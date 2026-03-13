@@ -7,6 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
 
 from notification import send_email
+from config import get_prefs_path
 
 import re
 import os
@@ -40,7 +41,7 @@ CITIES = {
 }
 
 def build_url():
-    with open("preferences.json", "r") as f:
+    with open(get_prefs_path(), "r") as f:
         prefs = json.load(f)
 
     city_slug, location_id = CITIES[prefs["city"]]
@@ -182,7 +183,7 @@ def main():
 
     DRIVER = webdriver.Chrome(options=open_options)
     WAIT = WebDriverWait(DRIVER, 10)
-    with open("preferences.json", "r") as f:
+    with open(get_prefs_path(), "r") as f:
         prefs = json.load(f)
     DRIVER.get(build_url())
 

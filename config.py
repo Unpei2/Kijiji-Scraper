@@ -1,6 +1,11 @@
 import json
 import getpass
 import keyring
+import os
+
+def get_prefs_path():
+    """Get absolute path to preferences.json in the script's directory."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "preferences.json")
 
 def get_preferences():
     brands = []
@@ -53,6 +58,6 @@ def get_preferences():
         "email": email
     }
 
-    with open("preferences.json", "w") as f:
+    with open(get_prefs_path(), "w") as f:
         json.dump(prefs, f, indent=4)
 

@@ -22,5 +22,8 @@ def schedule_task():
 
 def unschedule_task():
     for name in ["KijijiScraper-9AM", "KijijiScraper-9PM"]:
-        subprocess.run(["schtasks", "/delete", "/tn", name, "/f"], check=True)
+        try:
+            subprocess.run(["schtasks", "/delete", "/tn", name, "/f"], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            pass  # Task doesn't exist (e.g. first run)
     print("Scheduled tasks removed.")
