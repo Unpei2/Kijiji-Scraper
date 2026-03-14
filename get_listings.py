@@ -130,6 +130,10 @@ def traverse(listings, prefs):
             print(f"{e}. Odometer finding error.")
             continue
 
+        max_km = prefs.get("max_kilometers")
+        if max_km is not None and corrected_odometer > max_km:
+            continue
+
         try:        # Transmission type
             transmission = odometer.find_next("p", class_=TRANSMISSION_CLASS)
             transmission_string = transmission.text
