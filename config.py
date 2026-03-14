@@ -7,6 +7,11 @@ def get_prefs_path():
     """Get absolute path to preferences.json in the script's directory."""
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "preferences.json")
 
+
+def get_listings_csv_path():
+    """Get absolute path to matching_listings.csv in the script's directory."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "matching_listings.csv")
+
 def get_preferences():
     brands = []
     print("Please enter user preferences. This can be changed later")

@@ -7,7 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
 
 from notification import send_email
-from config import get_prefs_path
+from config import get_prefs_path, get_listings_csv_path
 
 import re
 import os
@@ -192,8 +192,8 @@ def main():
     visited_urls = set()
     total_start = time.time()
     SEEN = set()
-    if os.path.exists("matching_listings.csv"):
-        with open("matching_listings.csv", "r") as f:
+    if os.path.exists(get_listings_csv_path()):
+        with open(get_listings_csv_path(), "r") as f:
             for line in f:
                 link = line.strip().split(";")[-1]  # link is the last column
                 SEEN.add(link)
@@ -224,11 +224,12 @@ def main():
     
     print(f"\nTotal listings scraped: {len(listings)} out of {num_listings.text}")
 
-    with open("matching_listings.csv", "a") as file:
+    csv_path = get_listings_csv_path()
+    with open(csv_path, "a") as file:
         for item in listings:
             file.write(f'{item["Title"]};{item["Price"]};{item["Kilometers"]};{item["Transmission"]};{item["Year"]};{item["Link"]}\n')
 
-    with open("matching_listings.csv", "r") as file:
+    with open(csv_path, "r") as file:
         line_count = sum(1 for _ in file)
         
     
