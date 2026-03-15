@@ -99,7 +99,7 @@ python main.py
 
 ## Changing Preferences
 
-Delete `preferences.json` and rerun `main.py`. You will be prompted to enter your preferences again.
+Delete `preferences.json` and rerun `main.py`. You will be prompted to enter your preferences again. Old listings saved will be deleted. There is also an option to directly change the file, which will not remove old listings.
 
 ---
 
